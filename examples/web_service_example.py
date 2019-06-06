@@ -20,7 +20,7 @@ import face_recognition
 from flask import Flask, jsonify, request, redirect
 
 # You can change this to any folder on your system
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}
 
 app = Flask(__name__)
 

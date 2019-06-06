@@ -35,13 +35,14 @@ import math
 from sklearn import neighbors
 import os
 import os.path
+import time
 import pickle
 from PIL import Image, ImageDraw
 import face_recognition
 from face_recognition.face_recognition_cli import image_files_in_folder
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'bmp'}
+REAL_NO=0
 
 def train(train_dir, model_save_path=None, n_neighbors=None, knn_algo='ball_tree', verbose=False):
     """
@@ -80,6 +81,8 @@ def train(train_dir, model_save_path=None, n_neighbors=None, knn_algo='ball_tree
         for img_path in image_files_in_folder(os.path.join(train_dir, class_dir)):
             image = face_recognition.load_image_file(img_path)
             face_bounding_boxes = face_recognition.face_locations(image)
+            if len(face_bounding_boxes) == 0:
+                face_bounding_boxes = face_recognition.face_locations(image, 1, "cnn")
 
             if len(face_bounding_boxes) != 1:
                 # If there are no people (or too many people) in a training image, skip the image.
@@ -137,9 +140,12 @@ def predict(X_img_path, knn_clf=None, model_path=None, distance_threshold=0.6):
 
     # If no faces are found in the image, return an empty result.
     if len(X_face_locations) == 0:
-        return []
+        X_face_locations = face_recognition.face_locations(X_img,1,"cnn")
+        if len(X_face_locations) == 0:
+            return []
 
     # Find encodings for faces in the test iamge
+
     faces_encodings = face_recognition.face_encodings(X_img, known_face_locations=X_face_locations)
 
     # Use the KNN model to find the best matches for the test face
@@ -180,27 +186,68 @@ def show_prediction_labels_on_image(img_path, predictions):
     # Display the resulting image
     pil_image.show()
 
-
-if __name__ == "__main__":
+def recognize(train_path, test_path, model_save_file,k_no):
+    REAL_NO,TOTAL_NO,FAIL_NO,CANNT_NO=0,0,0,0
     # STEP 1: Train the KNN classifier and save it to disk
     # Once the model is trained and saved, you can skip this step next time.
-    print("Training KNN classifier...")
-    classifier = train("knn_examples/train", model_save_path="trained_knn_model.clf", n_neighbors=2)
-    print("Training complete!")
-
+    # train_path,test_path,model_save_file="F:/faces/train2/","F:/faces/bak/test/","trained_knn_model_xmj2.clf"
+    t0 = time.time()
+    # train_path,test_path,model_save_file="F:/faces/train3/","F:/faces/bak/test/","trained_knn_model_xmj3.clf"
+    # train_path, test_path, model_save_file = "F:/faces/all_train/", "F:/faces/all_test/", "trained_knn_model_xmj_all4.clf"
+    print("\nTraining KNN classifier...train_path:{},test_path:{},model_save_file:{}".format(train_path,test_path,model_save_file))
+    # classifier = train("knn_examples/train", model_save_path="trained_knn_model.clf", n_neighbors=2)
+    classifier = train(train_path, model_save_path=model_save_file, n_neighbors=k_no)
+    t1 = time.time()
+    print("Training complete! ")
+    # right=0
     # STEP 2: Using the trained classifier, make predictions for unknown images
-    for image_file in os.listdir("knn_examples/test"):
-        full_file_path = os.path.join("knn_examples/test", image_file)
+    norecognize_list,norecognize_list1 = [],[]
+    for image_file in os.listdir(test_path):
+        full_file_path = os.path.join(test_path, image_file)
 
-        print("Looking for faces in {}".format(image_file))
+        # print("Looking for faces in {}".format(image_file))
 
         # Find all people in the image using a trained classifier model
         # Note: You can pass in either a classifier file name or a classifier model instance
-        predictions = predict(full_file_path, model_path="trained_knn_model.clf")
-
+        # predictions = predict(full_file_path, model_path="trained_knn_model.clf")
+        predictions = predict(full_file_path, model_path=model_save_file)
+        
+        TOTAL_NO+=1
+        if predictions.__len__() < 1:
+            norecognize_list1.append(image_file)
+            CANNT_NO+=1
+            continue
         # Print results on the console
         for name, (top, right, bottom, left) in predictions:
-            print("- Found {} at ({}, {})".format(name, left, top))
+
+            if str.find(image_file, name) != -1:
+                REAL_NO += 1
+                # print("- Found {} at ({}, {}),REAL_NO:{}".format(name, left, top, REAL_NO))
+            else:
+                FAIL_NO+=1
+                norecognize_list.append(image_file)
 
         # Display results overlaid on an image
-        show_prediction_labels_on_image(os.path.join("knn_examples/test", image_file), predictions)
+        # show_prediction_labels_on_image(os.path.join(test_path, image_file), predictions)
+    # print(REAL_NO)
+    t2 = time.time()
+    print("训练模型耗时：{}s,模型预测耗时：{}s,未能识别的图片：{},\n 识别错误的图片：{}" .format(round((t1 - t0),2),round((t2 - t1), 2),norecognize_list1,norecognize_list))
+    print("聚类数：{},分类数：{}，准确率：{},正确识别数：{},错误数：{},未能识别图片数：{}"\
+          .format( k_no,TOTAL_NO,round((TOTAL_NO-FAIL_NO-CANNT_NO)/TOTAL_NO,2),REAL_NO,FAIL_NO,CANNT_NO))
+
+if __name__ == "__main__":
+    # norecognize_list = []
+    for i in [
+        "F:/faces/train/,F:/faces/bak/test/,trained_knn_model_xmj_11_test.clf,2",
+        # "F:/faces/train2/,F:/faces/bak/test/,trained_knn_model_xmj2_11.clf,2",
+        # "F:/faces/train3/,F:/faces/bak/test/,trained_knn_model_xmj3_11.clf,2",
+        # "F:/faces/train4/,F:/faces/bak/test/,trained_knn_model_xmj4_11.clf,2",
+        # "F:/faces/all_train/,F:/faces/all_test/,trained_knn_model_xmj_all4_21.clf,2",
+        # "F:/faces/all_train/,F:/faces/all_test/,trained_knn_model_xmj_all4_31.clf,3",
+        # "F:/faces/all_train/,F:/faces/all_test/,trained_knn_model_xmj_all4_11.clf,1",
+        # "F:/faces/a_train/,F:/faces/a_test/,trained_knn_model_xmj_a4_11.clf,2"
+    ]:
+        # print(str.split(i,","))
+        recognize(str.split(i, ",")[0], str.split(i, ",")[1], "models/"+str.split(i, ",")[2], int(str.split(i, ",")[3]))
+    print("===================")
+    quit()
